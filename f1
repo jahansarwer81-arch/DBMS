@@ -1,0 +1,324 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audit Reports - ASA Data Server</title>
+    <link rel="stylesheet" href="css/dashboard.css">
+    <link rel="stylesheet" href="css/table.css">
+    <link rel="stylesheet" href="css/modal.css">
+    <style>
+        .action-buttons-inline {
+            display: flex;
+            gap: 5px;
+            justify-content: center;
+        }
+
+        .btn-small {
+            padding: 5px 8px;
+            font-size: 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+
+        .btn-edit {
+            background: #3498db;
+            color: white;
+        }
+
+        .btn-edit:hover {
+            background: #2980b9;
+        }
+
+        .btn-delete {
+            background: #e74c3c;
+            color: white;
+        }
+
+        .btn-delete:hover {
+            background: #c0392b;
+        }
+    </style>
+</head>
+
+<body>
+    <nav class="navbar">
+        <div class="nav-brand">
+            <h2>🏛️ ASA Data Server</h2>
+            <p style="font-size: 12px; margin: 0; color: #ddd;">Association for Social Advancement</p>
+        </div>
+        <ul class="nav-menu">
+            <li><a href="dashboard-asa.html">📊 Dashboard</a></li>
+            <li><a href="companies-functional.html">🏢 Companies</a></li>
+            <li><a href="investors-functional.html">👤 Investors</a></li>
+            <li><a href="stocks-functional.html">📈 Stocks</a></li>
+            <li><a href="transactions-functional.html">💰 Transactions</a></li>
+            <li><a href="audit-reports-functional.html" class="active">📋 Audit Reports</a></li>
+            <li><a href="institutions-functional.html">🏛️ Institutions</a></li>
+            <li><a href="trades-functional.html">🔄 Trades</a></li>
+            <li><a href="users-functional.html">👥 Users</a></li>
+            <li><a href="fraud-alerts-functional.html">⚠️ Fraud Alerts</a></li>
+            <li><a href="price-history-functional.html">📊 Price History</a></li>
+            <li><a href="predictions-functional.html">🔮 Predictions</a></li>
+            <li><a href="#" class="logout" onclick="handleLogout(); return false;">🚪 Logout</a></li>
+        </ul>
+    </nav>
+
+    <div class="main-content">
+        <div class="page-header">
+            <h1>📋 Audit Reports Management</h1>
+            <p>Manage compliance audits, findings, and regulatory reports</p>
+        </div>
+
+        <div class="table-controls">
+            <div class="search-box">
+                <input type="text" placeholder="Search audit reports..." id="searchInput">
+                <button class="btn-search" onclick="handleSearch()">Search</button>
+            </div>
+            <div class="action-buttons">
+                <button class="btn-add" onclick="openAddModal()">+ Add</button>
+            </div>
+        </div>
+
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Audit ID</th>
+                        <th>Auditor Name</th>
+                        <th>Company ID</th>
+                        <th>Audit Date</th>
+                        <th>Findings</th>
+                        <th>Risk Level</th>
+                        <th>Status</th>
+                        <th>Action</th>
+                    </tr>
+                </thead>
+                <tbody id="tableBody">
+                    <tr>
+                        <td colspan="8" style="text-align: center; padding: 40px;">Loading...</td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Add/Edit Modal -->
+    <div id="auditModal" class="modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h2 id="modalTitle">Add Audit Report</h2>
+                <span class="close" onclick="closeModal('auditModal')">&times;</span>
+            </div>
+            <div class="modal-body">
+                <form id="auditForm">
+                    <input type="hidden" id="audit_id">
+
+                    <div class="form-group">
+                        <label for="auditor_name">Auditor Name *</label>
+                        <input type="text" id="auditor_name" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="company_id">Company ID *</label>
+                        <select id="company_id" required>
+                            <option value="">Select Company</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="audit_date">Audit Date *</label>
+                        <input type="date" id="audit_date" required>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="findings">Findings *</label>
+                        <textarea id="findings" rows="4" placeholder="Enter audit findings..." required></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="risk_level">Risk Level *</label>
+                        <select id="risk_level" required>
+                            <option value="Low">Low</option>
+                            <option value="Medium">Medium</option>
+                            <option value="High">High</option>
+                            <option value="Critical">Critical</option>
+                        </select>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="status">Status</label>
+                        <input type="text" id="status" placeholder="Leave blank for now" style="background: #f5f5f5;">
+                    </div>
+                </form>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-secondary" onclick="closeModal('auditModal')">Cancel</button>
+                <button class="btn btn-primary" onclick="handleSave()">Save</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/local-database.js"></script>
+    <script src="js/auth-check.js"></script>
+    <script src="js/logout.js"></script>
+    <script>
+        const db = new LocalDatabase('audit_reports');
+        const companiesDb = new LocalDatabase('companies');
+        let isEditMode = false;
+
+        window.addEventListener('DOMContentLoaded', () => {
+            loadAudits();
+            loadCompanies();
+        });
+
+        function loadCompanies() {
+            const companies = companiesDb.getAll();
+            const companySelect = document.getElementById('company_id');
+
+            companySelect.innerHTML = '<option value="">Select Company</option>';
+
+            companies.forEach(company => {
+                const option = document.createElement('option');
+                option.value = company.id;
+                option.textContent = ${company.id} - ${company.company_name};
+                companySelect.appendChild(option);
+            });
+        }
+
+        function loadAudits() {
+            const audits = db.getAll();
+            renderTable(audits);
+        }
+
+        function renderTable(audits) {
+            const tbody = document.getElementById('tableBody');
+
+            if (audits.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" style="text-align: center; padding: 40px;">No audit reports found</td></tr>';
+                return;
+            }
+
+            const riskColors = {
+                'Low': '#28a745',
+                'Medium': '#ffc107',
+                'High': '#fd7e14',
+                'Critical': '#dc3545'
+            };
+
+            tbody.innerHTML = audits.map(audit => `
+                <tr>
+                    <td>${audit.id}</td>
+                    <td>${audit.auditor_name}</td>
+                    <td>${audit.company_id}</td>
+                    <td>${audit.audit_date || '-'}</td>
+                    <td style="max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">${audit.findings || '-'}</td>
+                    <td><span class="badge" style="background: ${riskColors[audit.risk_level]}; color: white;">${audit.risk_level}</span></td>
+                    <td>${audit.status || '-'}</td>
+                    <td>
+                        <div class="action-buttons-inline">
+                            <button class="btn-small btn-edit" onclick="openEditModal(${audit.id})" title="Edit">✏️ Edit</button>
+                            <button class="btn-small btn-delete" onclick="handleDelete(${audit.id})" title="Remove" style="background: #e74c3c;">🗑️ Remove</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function handleSearch() {
+            const query = document.getElementById('searchInput').value;
+            if (query.trim() === '') {
+                loadAudits();
+            } else {
+                const results = db.search(query);
+                renderTable(results);
+            }
+        }
+
+        function openAddModal() {
+            isEditMode = false;
+            document.getElementById('modalTitle').textContent = 'Add Audit Report';
+            document.getElementById('auditForm').reset();
+            document.getElementById('audit_id').value = '';
+            document.getElementById('audit_date').value = new Date().toISOString().split('T')[0];
+            loadCompanies();
+            openModal('auditModal');
+        }
+
+        function openEditModal(id) {
+            isEditMode = true;
+            document.getElementById('modalTitle').textContent = 'Edit Audit Report';
+            loadCompanies();
+
+            const audit = db.getById(id);
+            if (audit) {
+                document.getElementById('audit_id').value = audit.id;
+                document.getElementById('auditor_name').value = audit.auditor_name;
+                document.getElementById('company_id').value = audit.company_id;
+                document.getElementById('audit_date').value = audit.audit_date || '';
+                document.getElementById('findings').value = audit.findings || '';
+                document.getElementById('risk_level').value = audit.risk_level;
+                document.getElementById('status').value = audit.status || '';
+                openModal('auditModal');
+            }
+        }
+
+        function handleSave() {
+            const data = {
+                auditor_name: document.getElementById('auditor_name').value,
+                company_id: document.getElementById('company_id').value,
+                audit_date: document.getElementById('audit_date').value,
+                findings: document.getElementById('findings').value,
+                risk_level: document.getElementById('risk_level').value,
+                status: document.getElementById('status').value
+            };
+
+            if (isEditMode) {
+                const id = document.getElementById('audit_id').value;
+                db.update(id, data);
+                alert('Audit report updated successfully!');
+            } else {
+                db.add(data);
+                alert('Audit report added successfully!');
+            }
+
+            closeModal('auditModal');
+            loadAudits();
+        }
+
+        function handleDelete(id) {
+            if (!confirm('Are you sure you want to delete this audit report?')) {
+                return;
+            }
+
+            db.delete(id);
+            alert('Audit report deleted successfully!');
+            loadAudits();
+        }
+
+        function openModal(modalId) {
+            document.getElementById(modalId).style.display = 'block';
+        }
+
+        function closeModal(modalId) {
+            document.getElementById(modalId).style.display = 'none';
+        }
+
+        window.onclick = function (event) {
+            if (event.target.classList.contains('modal')) {
+                event.target.style.display = 'none';
+            }
+        }
+
+        document.getElementById('searchInput').addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                handleSearch();
+            }
+        });
+    </script>
+</body>
+
+</html>
